@@ -191,10 +191,6 @@ def raw_material_expiry_risks():
     # Parse with flexible format inference
     dates = pd.to_datetime(dates_raw, errors="coerce", infer_datetime_format=True)
 
-    # Debugging
-    st.write("🔎 Cleaned raw values:", dates_raw.head(10))
-    st.write("🔎 Parsed datetime values:", dates.head(10))
-
     risks = df_master[(dates.notna()) & (dates < (today + pd.Timedelta(days=30)))]
     if risks.empty:
         return pd.DataFrame({"Message": ["✅ No raw materials expiring within 30 days."]})
@@ -260,3 +256,4 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
