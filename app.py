@@ -177,6 +177,89 @@ def color_performance_for_style(style_number):
 
     pdf = export_table_to_pdf(grouped.reset_index(), f"Color Performance – Style {style_number}")
     st.download_button("📄 Download PDF", data=pdf, file_name="color_performance.pdf", mime="application/pdf")
+    # ---- OpenAI Functions ----
+functions = [
+    {
+        "name": "forecast_lookup",
+        "description": "Get forecast for a collection and month, with optional color filter",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "collection": {"type": "string"},
+                "month": {"type": "string"},
+                "year": {"type": "integer"},
+                "color": {"type": "string"}
+            },
+            "required": ["collection", "month", "year"]
+        }
+    },
+    {
+        "name": "top_3_styles",
+        "description": "Top 3 styles in a collection for a month, with optional color",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "collection": {"type": "string"},
+                "month": {"type": "string"},
+                "year": {"type": "integer"},
+                "color": {"type": "string"}
+            },
+            "required": ["collection", "month", "year"]
+        }
+    },
+    {
+        "name": "color_performance_for_style",
+        "description": "Show a chart of units by color for a given style number",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "style_number": {"type": "string"}
+            },
+            "required": ["style_number"]
+        }
+    },
+    {
+        "name": "list_available_collections",
+        "description": "List all collections found in the forecast file",
+        "parameters": {
+            "type": "object",
+            "properties": {}
+        }
+    }
+]
+
+# ---- User Input & OpenAI Handler ----
+user_question = st.text_input("💬 Ask your forecast question:")
+
+if user_question:
+    with st.spinner("Thinking..."):
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": user_question}],
+                functions=functions,
+                function_call="auto"
+            )
+
+            msg = response.choices[0].message
+            if msg.get("function_call"):
+                name = msg["function_call"]["name"]
+                args = json.loads(msg["function_call"]["arguments"])
+                match name:
+                    case "forecast_lookup":
+                        st.success(forecast_lookup(**args))
+                    case "top_3_styles":
+                        top_3_styles(**args)
+                    case "color_performance_for_style":
+                        color_performance_for_style(**args)
+                    case "list_available_collections":
+                        st.success(list_available_collections())
+            else:
+                st.success(msg["content"])
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+
 
 
 
