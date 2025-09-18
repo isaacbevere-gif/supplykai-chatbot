@@ -8,41 +8,12 @@ import matplotlib.pyplot as plt
 import base64
 import io
 
-# ---- PAGE CONFIG ----
+# ---- CONFIG ----
 st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout="centered")
 
 # ---- BACKGROUND IMAGE (JPEG) ----
 def set_background():
-    def set_custom_styles():
-        st.markdown(
-        """
-        <style>
-        html, body, [class*="css"] {
-            color: black !important;
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-        }
-
-        /* Question input box */
-        .stTextInput > div > div > input {
-            background-color: white !important;
-            color: black !important;
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-        }
-
-        /* Buttons, labels, etc */
-        .stButton > button {
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-        }
-
-        .stMarkdown, .stDataFrame, .stDownloadButton {
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    file_path = "supplykai_background_image.jpg"
+    file_path = "supplykai_background_image.jpeg"
     if os.path.exists(file_path):
         with open(file_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
@@ -60,17 +31,54 @@ def set_background():
             """,
             unsafe_allow_html=True
         )
-set_background()
 
-# ---- LOGO ----
-if os.path.exists("supplykai_logo.png"):
-    logo = Image.open("supplykai_logo.png")
-    st.image(logo, width=200)
+# ---- CUSTOM STYLES (Proxima Soft, black text, white input) ----
+def set_custom_styles():
+    st.markdown(
+        """
+        <style>
+        html, body, .stApp {
+            color: black !important;
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+        input[type="text"], textarea, .stTextInput input {
+            background-color: white !important;
+            color: black !important;
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+        .stButton > button, .stDownloadButton > button {
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+        .stMarkdown, .stDataFrame {
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+            color: black !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# ---- LOGO DISPLAY ----
+def show_logo():
+    logo_path = "supplykai_logo.png"
+    if os.path.exists(logo_path):
+        st.markdown(
+            f"""
+            <div style="display: flex; justify-content: center;">
+                <img src="data:image/png;base64,{base64.b64encode(open(logo_path, "rb").read()).decode()}" width="200">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# ---- RUN STYLES + LOGO ----
+set_background()
+set_custom_styles()
+show_logo()
 
 st.title("SupplyKai Assistant v.01 (Big4 Monthly Rolling Forecast)")
 st.caption("Upload your forecast file and ask your questions.")
-
-# ---- OPENAI API KEY ----
+# ---- OPENAI API ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ---- FILE UPLOAD ----
@@ -85,7 +93,7 @@ except Exception as e:
     st.error(f"Error reading file: {e}")
     st.stop()
 
-# ---- MONTH COLUMN MAP ----
+# ---- MONTH COLUMN MAPPING ----
 month_column_map = {
     "April 2026": "SU26 M1",
     "May 2026": "SU26 M2",
@@ -94,20 +102,35 @@ month_column_map = {
     "August 2026": "FAL26 M2",
     "September 2026": "FAL26 M3"
 }
-# ---- Helper: Validate Collection ----
+
+# ---- VALIDATION: CHECK IF COLLECTION EXISTS ----
 def is_valid_collection(collection):
     available = df["Style Collection"].dropna().str.lower().str.strip().unique()
     return collection.lower().strip() in available
 
-# ---- Get Available Collections ----
+# ---- LIST ALL COLLECTIONS ----
 def list_available_collections():
     if "Style Collection" not in df.columns:
         return "⚠️ 'Style Collection' column not found."
     collections = df["Style Collection"].dropna().unique()
     collections = sorted([str(c).strip() for c in collections])
     return "Available collections:\n\n" + "\n".join(f"- {c}" for c in collections)
+# ---- EXPORT ANY DATAFRAME TO PDF ----
+def export_table_to_pdf(dataframe, title):
+    from matplotlib.backends.backend_pdf import PdfPages
+    fig, ax = plt.subplots(figsize=(8.5, 3 + len(dataframe) * 0.5))
+    ax.axis("off")
+    table = ax.table(cellText=dataframe.values, colLabels=dataframe.columns, loc="center")
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    plt.title(title, fontsize=12)
+    output = io.BytesIO()
+    with PdfPages(output) as pdf:
+        pdf.savefig(fig, bbox_inches='tight')
+    output.seek(0)
+    return output
 
-# ---- Forecast Lookup with Color Filter ----
+# ---- FORECAST LOOKUP ----
 def forecast_lookup(collection, month, year, color=None):
     if not is_valid_collection(collection):
         return list_available_collections()
@@ -123,23 +146,7 @@ def forecast_lookup(collection, month, year, color=None):
         label += f" (Color: {color})"
     return f"📊 Forecast for **{label}**: **{int(round(total)):,} units**."
 
-# ---- Export Table to PDF ----
-def export_table_to_pdf(dataframe, title):
-    from matplotlib.backends.backend_pdf import PdfPages
-    fig, ax = plt.subplots(figsize=(8.5, 3 + len(dataframe) * 0.5))
-    ax.axis("tight")
-    ax.axis("off")
-    table = ax.table(cellText=dataframe.values, colLabels=dataframe.columns, loc="center")
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    plt.title(title, fontsize=12)
-    output = io.BytesIO()
-    with PdfPages(output) as pdf:
-        pdf.savefig(fig, bbox_inches='tight')
-    output.seek(0)
-    return output
-
-# ---- Top Styles (with optional color + PDF) ----
+# ---- TOP 3 STYLES ----
 def top_3_styles(collection, month, year, color=None):
     if not is_valid_collection(collection):
         st.warning(list_available_collections())
@@ -155,6 +162,7 @@ def top_3_styles(collection, month, year, color=None):
     top["Label"] = top["Style Number"].astype(str) + " – " + top["Description"]
     values = top[col].round().astype(int).values
     labels = top["Label"].values
+
     st.subheader(f"Top 3 styles in {collection} for {month} {year}" + (f" (Color: {color})" if color else ""))
     fig, ax = plt.subplots(figsize=(8, 5))
     bars = ax.bar(labels, values, color="#1f77b4")
@@ -175,7 +183,7 @@ def top_3_styles(collection, month, year, color=None):
     pdf = export_table_to_pdf(table, f"Top 3 Styles – {collection} – {month} {year}")
     st.download_button("📄 Download PDF", data=pdf, file_name="top_styles.pdf", mime="application/pdf")
 
-# ---- Color Performance (with PDF) ----
+# ---- COLOR PERFORMANCE BY STYLE ----
 def color_performance_for_style(style_number):
     cols = list(month_column_map.values())
     filtered = df[df["Style Number"].astype(str).str.lower().str.strip() == style_number.lower().strip()]
@@ -206,11 +214,11 @@ def color_performance_for_style(style_number):
 
     pdf = export_table_to_pdf(grouped.reset_index(), f"Color Performance – Style {style_number}")
     st.download_button("📄 Download PDF", data=pdf, file_name="color_performance.pdf", mime="application/pdf")
-    # ---- OpenAI Functions ----
+# ---- OPENAI FUNCTION SCHEMA ----
 functions = [
     {
         "name": "forecast_lookup",
-        "description": "Get forecast for a collection and month, with optional color filter",
+        "description": "Get forecast for a collection and month, optionally filtered by color",
         "parameters": {
             "type": "object",
             "properties": {
@@ -224,7 +232,7 @@ functions = [
     },
     {
         "name": "top_3_styles",
-        "description": "Top 3 styles in a collection for a month, with optional color",
+        "description": "Top 3 styles in a collection for a month, optionally filtered by color",
         "parameters": {
             "type": "object",
             "properties": {
@@ -238,7 +246,7 @@ functions = [
     },
     {
         "name": "color_performance_for_style",
-        "description": "Show a chart of units by color for a given style number",
+        "description": "Show color-level forecast for a style number",
         "parameters": {
             "type": "object",
             "properties": {
@@ -249,7 +257,7 @@ functions = [
     },
     {
         "name": "list_available_collections",
-        "description": "List all collections found in the forecast file",
+        "description": "List all unique collections from the uploaded file",
         "parameters": {
             "type": "object",
             "properties": {}
@@ -257,7 +265,7 @@ functions = [
     }
 ]
 
-# ---- User Input & OpenAI Handler ----
+# ---- USER INPUT & OPENAI COMPLETION ----
 user_question = st.text_input("💬 Ask your forecast question:")
 
 if user_question:
@@ -265,7 +273,9 @@ if user_question:
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": user_question}],
+                messages=[
+                    {"role": "user", "content": user_question}
+                ],
                 functions=functions,
                 function_call="auto"
             )
@@ -274,6 +284,7 @@ if user_question:
             if msg.get("function_call"):
                 name = msg["function_call"]["name"]
                 args = json.loads(msg["function_call"]["arguments"])
+
                 match name:
                     case "forecast_lookup":
                         st.success(forecast_lookup(**args))
@@ -285,6 +296,7 @@ if user_question:
                         st.success(list_available_collections())
             else:
                 st.success(msg["content"])
+
         except Exception as e:
             st.error(f"❌ Error: {e}")
 
