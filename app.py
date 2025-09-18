@@ -57,6 +57,7 @@ def ensure_dataframe(obj, fallback_message):
 # ---- FILE UPLOADS ----
 st.subheader("📂 Upload Data Files")
 uploaded_master = st.file_uploader("Upload Master Dataset (CSV)", type=["csv"])
+df_master_raw = pd.read_csv(uploaded_master, sep=None, engine="python")
 uploaded_forecast = st.file_uploader("Upload Forecast Dataset (Excel)", type=["xlsx"])
 
 if not uploaded_master or not uploaded_forecast:
@@ -276,3 +277,4 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
