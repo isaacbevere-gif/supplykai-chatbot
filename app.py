@@ -38,6 +38,4 @@ def forecast_lookup(collection: str, month: str, year: int) -> str:
 
     full_month = f"{month} {year}"
     if full_month not in month_column_map:
-        return f"⚠️ Sorry, no forecast data available for {full_month}."
-
-    target_column = month_column_map[full_mo_]()_
+        return f"⚠️ Sorry, no for
