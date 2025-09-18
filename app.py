@@ -8,55 +8,34 @@ import matplotlib.pyplot as plt
 import base64
 import io
 
-# ---- CONFIG ----
+# ---- PAGE CONFIG ----
 st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout="centered")
 
-# ---- BACKGROUND IMAGE (JPEG) ----
-def set_background():
-    file_path = "supplykai_background_image.jpg"
-    if os.path.exists(file_path):
-        with open(file_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode()
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url("data:image/jpg;base64,{encoded}");
-                background-size: cover;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-                background-position: center;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-# ---- CUSTOM STYLES (Proxima Soft, black text, white input) ----
+# ---- CUSTOM STYLES ----
 def set_custom_styles():
     st.markdown(
         """
         <style>
-
-        /* GLOBAL FONT + TEXT COLOR */
         html, body, .stApp {
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
             color: black !important;
         }
 
-        /* CAPTION TEXT UNDER TITLE */
         .stMarkdown h6, .stCaption {
             color: black !important;
-            font-weight: normal !important;
         }
 
-        /* FILE UPLOADER LABEL TEXT */
+        input[type="text"], textarea, .stTextInput input {
+            background-color: white !important;
+            color: black !important;
+            border: 1px solid #ccc !important;
+        }
+
         .stFileUploader label {
             color: black !important;
             font-weight: bold !important;
         }
 
-        /* FILE UPLOADER BROWSE BUTTON */
         .stFileUploader label div span {
             background-color: white !important;
             color: black !important;
@@ -66,30 +45,14 @@ def set_custom_styles():
             border: 1px solid #000 !important;
         }
 
-        /* Uploaded file name preview */
-        .stFileUploader .uploadedFileName {
-            color: black !important;
-        }
-
-        /* INPUT BOXES */
-        input[type="text"], textarea, .stTextInput input {
-            background-color: white !important;
-            color: black !important;
-            border: 1px solid #ccc !important;
-        }
-
-        /* BUTTONS */
         .stButton > button, .stDownloadButton > button {
             color: black !important;
             background-color: white !important;
             font-weight: 500 !important;
         }
 
-        /* WARNING TEXT */
-        .stAlert {
-            background-color: rgba(255, 255, 255, 0.85) !important;
+        .stMarkdown, .stDataFrame {
             color: black !important;
-            border: 1px solid #ccc !important;
         }
 
         </style>
@@ -97,51 +60,27 @@ def set_custom_styles():
         unsafe_allow_html=True
     )
 
-# ---- DEFINE LOGO FUNCTION ----
+# ---- LOGO DISPLAY ----
 def show_logo():
     logo_path = "supplykai_logo.png"
     if os.path.exists(logo_path):
         st.markdown(
             f"""
-            <div style="display: flex; justify-content: center;">
+            <div style="display: flex; justify-content: center; padding-bottom: 10px;">
                 <img src="data:image/png;base64,{base64.b64encode(open(logo_path, "rb").read()).decode()}" width="200">
             </div>
             """,
             unsafe_allow_html=True
         )
+    else:
+        st.warning("Logo not found: supplykai_logo.png")
 
 # ---- RUN STYLES + LOGO ----
-set_background()
 set_custom_styles()
 show_logo()
 
 st.title("SupplyKai Assistant v.01 (Big4 Monthly Rolling Forecast)")
 st.caption("Upload your forecast file and ask your questions.")
-
-# ---- OPENAI API ----
-openai.api_key = st.secrets["OPENAI_API_KEY"]
-
-# ---- FILE UPLOAD ----
-uploaded_file = st.file_uploader("📁 Upload your Big4RollingForecast.xlsx", type=["xlsx"])
-if uploaded_file is None:
-    st.warning("Please upload a forecast file.")
-    st.stop()
-
-try:
-    df = pd.read_excel(uploaded_file)
-except Exception as e:
-    st.error(f"Error reading file: {e}")
-    st.stop()
-    
-# ---- MONTH COLUMN MAPPING ----
-month_column_map = {
-    "April 2026": "SU26 M1",
-    "May 2026": "SU26 M2",
-    "June 2026": "SU26 M3",
-    "July 2026": "FAL26 M1",
-    "August 2026": "FAL26 M2",
-    "September 2026": "FAL26 M3"
-}
 
 # ---- VALIDATION: CHECK IF COLLECTION EXISTS ----
 def is_valid_collection(collection):
@@ -339,6 +278,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
