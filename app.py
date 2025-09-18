@@ -186,10 +186,15 @@ def raw_material_expiry_risks():
         return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found. Found: {', '.join(df_master.columns)}"]})
     
     today = pd.Timestamp.today()
-    # Force MM/DD/YYYY parsing
-    dates = pd.to_datetime(df_master[date_col], errors="coerce", format="%m/%d/%Y")
+
+    # Force column to string, strip spaces, replace bad entries
+    dates_raw = df_master[date_col].astype(str).str.strip().replace({"nan": None, "n/a": None, "NaT": None, "—": None})
     
-    st.write("🔎 Parsed RM Shelf Life End values:", dates.head(10))  # Debug line
+    # Try parsing with multiple formats
+    dates = pd.to_datetime(dates_raw, errors="coerce", infer_datetime_format=True)
+    
+    st.write("🔎 Cleaned raw values:", dates_raw.head(10))   # Debug: raw strings
+    st.write("🔎 Parsed datetime values:", dates.head(10))  # Debug: converted dates
 
     risks = df_master[(dates.notna()) & (dates < (today + pd.Timedelta(days=30)))]
     if risks.empty:
@@ -256,4 +261,5 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
