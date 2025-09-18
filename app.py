@@ -9,58 +9,9 @@ import base64
 import io
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout="centered")
+st.set_page_config(page_title="SupplyKai Assistant v.01", layout="centered")
 
-# ---- CUSTOM STYLES ----
-def set_custom_styles():
-    st.markdown(
-        """
-        <style>
-        html, body, .stApp {
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-            color: white !important;
-        }
-
-        .stMarkdown h6, .stCaption {
-            color: white !important;
-        }
-
-        input[type="text"], textarea, .stTextInput input {
-            background-color: white !important;
-            color: black !important;
-            border: 1px solid #ccc !important;
-        }
-
-        .stFileUploader label {
-            color: black !important;
-            font-weight: bold !important;
-        }
-
-        .stFileUploader label div span {
-            background-color: white !important;
-            color: black !important;
-            padding: 6px 12px;
-            border-radius: 5px;
-            font-weight: bold !important;
-            border: 1px solid #000 !important;
-        }
-
-        .stButton > button, .stDownloadButton > button {
-            color: black !important;
-            background-color: white !important;
-            font-weight: 500 !important;
-        }
-
-        .stMarkdown, .stDataFrame {
-            color: black !important;
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-# ---- LOGO DISPLAY ----
+# ---- LOGO ----
 def show_logo():
     logo_path = "supplykai_logo.png"
     if os.path.exists(logo_path):
@@ -72,29 +23,51 @@ def show_logo():
             """,
             unsafe_allow_html=True
         )
-    else:
-        st.warning("Logo not found: supplykai_logo.png")
 
-# ---- RUN STYLES + LOGO ----
-set_custom_styles()
 show_logo()
 
+# ---- TITLE ----
 st.title("SupplyKai Assistant v.01 (Big4 Monthly Rolling Forecast)")
 st.caption("Upload your forecast file and ask your questions.")
 
-# ---- VALIDATION: CHECK IF COLLECTION EXISTS ----
+# ---- OPENAI API KEY ----
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# ---- FILE UPLOAD ----
+uploaded_file = st.file_uploader("📁 Upload your Big4RollingForecast.xlsx", type=["xlsx"])
+if uploaded_file is None:
+    st.warning("Please upload a forecast file.")
+    st.stop()
+
+try:
+    df = pd.read_excel(uploaded_file)
+except Exception as e:
+    st.error(f"Error reading file: {e}")
+    st.stop()
+
+# ---- MONTH COLUMN MAPPING ----
+month_column_map = {
+    "April 2026": "SU26 M1",
+    "May 2026": "SU26 M2",
+    "June 2026": "SU26 M3",
+    "July 2026": "FAL26 M1",
+    "August 2026": "FAL26 M2",
+    "September 2026": "FAL26 M3"
+}
+
+# ---- COLLECTION DETECTION ----
 def is_valid_collection(collection):
     available = df["Style Collection"].dropna().str.lower().str.strip().unique()
     return collection.lower().strip() in available
 
-# ---- LIST ALL COLLECTIONS ----
 def list_available_collections():
     if "Style Collection" not in df.columns:
         return "⚠️ 'Style Collection' column not found."
     collections = df["Style Collection"].dropna().unique()
     collections = sorted([str(c).strip() for c in collections])
     return "Available collections:\n\n" + "\n".join(f"- {c}" for c in collections)
-# ---- EXPORT ANY DATAFRAME TO PDF ----
+
+# ---- EXPORT TO PDF ----
 def export_table_to_pdf(dataframe, title):
     from matplotlib.backends.backend_pdf import PdfPages
     fig, ax = plt.subplots(figsize=(8.5, 3 + len(dataframe) * 0.5))
@@ -162,7 +135,7 @@ def top_3_styles(collection, month, year, color=None):
     pdf = export_table_to_pdf(table, f"Top 3 Styles – {collection} – {month} {year}")
     st.download_button("📄 Download PDF", data=pdf, file_name="top_styles.pdf", mime="application/pdf")
 
-# ---- COLOR PERFORMANCE BY STYLE ----
+# ---- COLOR PERFORMANCE ----
 def color_performance_for_style(style_number):
     cols = list(month_column_map.values())
     filtered = df[df["Style Number"].astype(str).str.lower().str.strip() == style_number.lower().strip()]
@@ -172,6 +145,7 @@ def color_performance_for_style(style_number):
     grouped = filtered.groupby("Color")[cols].sum()
     grouped["Total Units"] = grouped.sum(axis=1)
     grouped = grouped.sort_values("Total Units", ascending=False)
+
     st.subheader(f"Color Performance for Style {style_number}")
     labels = grouped.index.tolist()
     values = grouped["Total Units"].round().astype(int).tolist()
@@ -193,7 +167,8 @@ def color_performance_for_style(style_number):
 
     pdf = export_table_to_pdf(grouped.reset_index(), f"Color Performance – Style {style_number}")
     st.download_button("📄 Download PDF", data=pdf, file_name="color_performance.pdf", mime="application/pdf")
-# ---- OPENAI FUNCTION SCHEMA ----
+
+# ---- OPENAI FUNCTIONS ----
 functions = [
     {
         "name": "forecast_lookup",
@@ -244,7 +219,7 @@ functions = [
     }
 ]
 
-# ---- USER INPUT & OPENAI COMPLETION ----
+# ---- CHAT INTERFACE ----
 user_question = st.text_input("💬 Ask your forecast question:")
 
 if user_question:
@@ -252,9 +227,7 @@ if user_question:
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "user", "content": user_question}
-                ],
+                messages=[{"role": "user", "content": user_question}],
                 functions=functions,
                 function_call="auto"
             )
@@ -275,9 +248,10 @@ if user_question:
                         st.success(list_available_collections())
             else:
                 st.success(msg["content"])
-
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
+
 
 
 
