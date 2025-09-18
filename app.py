@@ -9,7 +9,7 @@ import io
 import re
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Lite v.06", layout="centered")
+st.set_page_config(page_title="SupplyKai Lite v.07", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
@@ -27,7 +27,7 @@ def show_logo():
 show_logo()
 
 # ---- TITLE ----
-st.title("SupplyKai Lite v.06")
+st.title("SupplyKai Lite v.07")
 st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask domain-specific questions.")
 
 # ---- OPENAI API KEY ----
@@ -183,18 +183,17 @@ def pending_lab_dips():
 def raw_material_expiry_risks():
     date_col = "rm_shelf_life_end"
     if date_col not in df_master.columns:
-        return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found. Found: {', '.join(df_master.columns)}"]})
+        return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     
     today = pd.Timestamp.today()
-
-    # Force column to string, strip spaces, replace bad entries
+    # Force text cleanup
     dates_raw = df_master[date_col].astype(str).str.strip().replace({"nan": None, "n/a": None, "NaT": None, "—": None})
-    
-    # Try parsing with multiple formats
+    # Parse with flexible format inference
     dates = pd.to_datetime(dates_raw, errors="coerce", infer_datetime_format=True)
-    
-    st.write("🔎 Cleaned raw values:", dates_raw.head(10))   # Debug: raw strings
-    st.write("🔎 Parsed datetime values:", dates.head(10))  # Debug: converted dates
+
+    # Debugging
+    st.write("🔎 Cleaned raw values:", dates_raw.head(10))
+    st.write("🔎 Parsed datetime values:", dates.head(10))
 
     risks = df_master[(dates.notna()) & (dates < (today + pd.Timedelta(days=30)))]
     if risks.empty:
@@ -261,5 +260,3 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
-
-
