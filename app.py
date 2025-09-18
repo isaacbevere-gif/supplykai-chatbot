@@ -38,37 +38,37 @@ def set_custom_styles():
         """
         <style>
 
-        /* GLOBAL FONT + COLOR */
+        /* GLOBAL FONT + TEXT COLOR */
         html, body, .stApp {
-            color: black !important;
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+            color: black !important;
         }
 
-        /* TITLE CAPTION (under main title) */
+        /* CAPTION TEXT UNDER TITLE */
         .stMarkdown h6, .stCaption {
-            color: white !important;
-            font-weight: 500 !important;
+            color: black !important;
+            font-weight: normal !important;
         }
 
-        /* FILE UPLOADER STYLING */
+        /* FILE UPLOADER LABEL TEXT */
         .stFileUploader label {
-            color: white !important;
+            color: black !important;
             font-weight: bold !important;
         }
 
+        /* FILE UPLOADER BROWSE BUTTON */
         .stFileUploader label div span {
-            color: white !important;
+            background-color: white !important;
+            color: black !important;
+            padding: 6px 12px;
+            border-radius: 5px;
             font-weight: bold !important;
+            border: 1px solid #000 !important;
         }
 
+        /* Uploaded file name preview */
         .stFileUploader .uploadedFileName {
-            color: white !important;
-        }
-
-        .stFileUploader .dropzone {
-            border: 1px solid white !important;
-            background-color: rgba(0, 0, 0, 0.6) !important;
-            color: white !important;
+            color: black !important;
         }
 
         /* INPUT BOXES */
@@ -81,32 +81,21 @@ def set_custom_styles():
         /* BUTTONS */
         .stButton > button, .stDownloadButton > button {
             color: black !important;
+            background-color: white !important;
             font-weight: 500 !important;
         }
 
-        /* WARNINGS (yellow banner) */
+        /* WARNING TEXT */
         .stAlert {
-            background-color: rgba(0, 0, 0, 0.5) !important;
-            color: white !important;
-            border: 1px solid white !important;
+            background-color: rgba(255, 255, 255, 0.85) !important;
+            color: black !important;
+            border: 1px solid #ccc !important;
         }
 
         </style>
         """,
         unsafe_allow_html=True
     )
-# ---- LOGO DISPLAY ----
-def show_logo():
-    logo_path = "supplykai_logo.png"
-    if os.path.exists(logo_path):
-        st.markdown(
-            f"""
-            <div style="display: flex; justify-content: center;">
-                <img src="data:image/png;base64,{base64.b64encode(open(logo_path, "rb").read()).decode()}" width="200">
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
 
 # ---- RUN STYLES + LOGO ----
 set_background()
@@ -336,6 +325,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
