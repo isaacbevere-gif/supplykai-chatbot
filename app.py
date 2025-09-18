@@ -38,43 +38,63 @@ def set_custom_styles():
         """
         <style>
 
-        /* Global font and color */
+        /* GLOBAL FONT + COLOR */
         html, body, .stApp {
             color: black !important;
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
         }
 
-        /* Input boxes */
+        /* TITLE CAPTION (under main title) */
+        .stMarkdown h6, .stCaption {
+            color: white !important;
+            font-weight: 500 !important;
+        }
+
+        /* FILE UPLOADER STYLING */
+        .stFileUploader label {
+            color: white !important;
+            font-weight: bold !important;
+        }
+
+        .stFileUploader label div span {
+            color: white !important;
+            font-weight: bold !important;
+        }
+
+        .stFileUploader .uploadedFileName {
+            color: white !important;
+        }
+
+        .stFileUploader .dropzone {
+            border: 1px solid white !important;
+            background-color: rgba(0, 0, 0, 0.6) !important;
+            color: white !important;
+        }
+
+        /* INPUT BOXES */
         input[type="text"], textarea, .stTextInput input {
             background-color: white !important;
             color: black !important;
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
             border: 1px solid #ccc !important;
         }
 
-        /* Make all buttons use white font by default */
+        /* BUTTONS */
         .stButton > button, .stDownloadButton > button {
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-            color: white !important;
-        }
-
-        /* Exception: make the "Browse files" button font white */
-        .stFileUploader label div span {
-            color: white !important;
-            font-weight: bold;
-        }
-
-        /* Tables, markdown */
-        .stMarkdown, .stDataFrame {
             color: black !important;
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+            font-weight: 500 !important;
+        }
+
+        /* WARNINGS (yellow banner) */
+        .stAlert {
+            background-color: rgba(0, 0, 0, 0.5) !important;
+            color: white !important;
+            border: 1px solid white !important;
         }
 
         </style>
         """,
         unsafe_allow_html=True
     )
-
 # ---- LOGO DISPLAY ----
 def show_logo():
     logo_path = "supplykai_logo.png"
@@ -316,6 +336,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
