@@ -6,9 +6,10 @@ import os
 import matplotlib.pyplot as plt
 import base64
 import io
+import re
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Assistant v.04", layout="centered")
+st.set_page_config(page_title="SupplyKai Assistant v.05", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
@@ -26,11 +27,32 @@ def show_logo():
 show_logo()
 
 # ---- TITLE ----
-st.title("SupplyKai Assistant v.04")
+st.title("SupplyKai Assistant v.05")
 st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask domain-specific questions.")
 
 # ---- OPENAI API KEY ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# ---- HELPERS ----
+def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Lowercase, trim, and replace any non-alphanumeric with underscores."""
+    df = df.copy()
+    new_cols = []
+    for c in df.columns.astype(str):
+        c2 = c.strip()
+        c2 = c2.replace("\u00A0", " ")  # non-breaking space -> space
+        c2 = c2.lower()
+        c2 = re.sub(r"[^a-z0-9]+", "_", c2)  # anything not a-z0-9 -> underscore
+        c2 = c2.strip("_")
+        new_cols.append(c2)
+    df.columns = new_cols
+    return df
+
+def ensure_dataframe(obj, fallback_message):
+    """Always return a DataFrame so Streamlit never crashes on strings."""
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    return pd.DataFrame({"Message": [fallback_message]})
 
 # ---- FILE UPLOADS ----
 st.subheader("📂 Upload Data Files")
@@ -41,30 +63,30 @@ if not uploaded_master or not uploaded_forecast:
     st.warning("Please upload both a Master CSV and a Forecast Excel file.")
     st.stop()
 
-# ---- READ MASTER FILE ----
+# ---- READ & NORMALIZE FILES ----
 try:
-    df_master = pd.read_csv(uploaded_master)
-    # Normalize column names
-    df_master.columns = (
-        df_master.columns.str.strip()
-        .str.replace(" ", "_")
-        .str.replace("-", "_")
-    )
+    df_master_raw = pd.read_csv(uploaded_master)
+    df_master = canonicalize_columns(df_master_raw)
 except Exception as e:
     st.error(f"Error reading Master CSV: {e}")
     st.stop()
 
-# ---- READ FORECAST FILE ----
 try:
-    df_forecast = pd.read_excel(uploaded_forecast)
-    df_forecast.columns = (
-        df_forecast.columns.str.strip()
-        .str.replace(" ", "_")
-        .str.replace("-", "_")
-    )
+    df_forecast_raw = pd.read_excel(uploaded_forecast)
+    df_forecast = canonicalize_columns(df_forecast_raw)
 except Exception as e:
     st.error(f"Error reading Forecast Excel: {e}")
     st.stop()
+
+# ---- OPTIONAL PREVIEW ----
+with st.expander("🔎 Data preview & column inspector"):
+    st.markdown("**Master columns (normalized):**")
+    st.write(list(df_master.columns))
+    st.dataframe(df_master.head())
+    st.markdown("---")
+    st.markdown("**Forecast columns (normalized):**")
+    st.write(list(df_forecast.columns))
+    st.dataframe(df_forecast.head())
 
 # ---- EXPORT TO PDF ----
 def export_table_to_pdf(dataframe, title):
@@ -81,91 +103,129 @@ def export_table_to_pdf(dataframe, title):
     output.seek(0)
     return output
 
-# ---- MONTH COLUMN MAPPING ----
+# ---- MONTH COLUMN MAPPING (normalized) ----
+# Note: after normalization, "SU26 M1" -> "su26_m1", etc.
 month_column_map = {
-    "April 2026": "SU26_M1",
-    "May 2026": "SU26_M2",
-    "June 2026": "SU26_M3",
-    "July 2026": "FAL26_M1",
-    "August 2026": "FAL26_M2",
-    "September 2026": "FAL26_M3"
+    "April 2026": "su26_m1",
+    "May 2026": "su26_m2",
+    "June 2026": "su26_m3",
+    "July 2026": "fal26_m1",
+    "August 2026": "fal26_m2",
+    "September 2026": "fal26_m3"
 }
 
-# ---- FORECAST FUNCTIONS ----
+# ---- FORECAST FUNCTIONS (use df_forecast with normalized columns) ----
 def list_available_collections():
-    if "Style_Collection" not in df_forecast.columns:
-        return pd.DataFrame({"Message": ["⚠️ 'Style_Collection' column not found."]})
-    collections = df_forecast["Style_Collection"].dropna().unique()
-    collections = sorted([str(c).strip() for c in collections])
-    return pd.DataFrame({"Available Collections": collections})
+    col = "style_collection"
+    if col not in df_forecast.columns:
+        return pd.DataFrame({"Message": [f"⚠️ '{col}' column not found in forecast file. Found: {', '.join(df_forecast.columns)}"]})
+    collections = df_forecast[col].dropna().astype(str).str.strip().unique()
+    collections = sorted(collections)
+    return pd.DataFrame({"available_collections": collections})
 
 def forecast_lookup(collection, month, year, color=None):
+    coll_col = "style_collection"
+    color_col = "color"
+    if coll_col not in df_forecast.columns:
+        return pd.DataFrame({"Message": [f"⚠️ '{coll_col}' column not found."]})
     col = month_column_map.get(f"{month} {year}")
     if not col or col not in df_forecast.columns:
         return pd.DataFrame({"Message": [f"⚠️ No forecast column for {month} {year}."]})
 
-    filtered = df_forecast[df_forecast["Style_Collection"].str.lower().str.strip() == collection.lower().strip()]
-    if color:
-        filtered = filtered[filtered["Color"].str.lower().str.strip() == color.lower().strip()]
+    filtered = df_forecast[df_forecast[coll_col].astype(str).str.lower().str.strip() == collection.lower().strip()]
+    if color and color_col in df_forecast.columns:
+        filtered = filtered[filtered[color_col].astype(str).str.lower().str.strip() == color.lower().strip()]
 
     if filtered.empty:
         return pd.DataFrame({"Message": [f"⚠️ No data for {collection} in {month} {year}."]})
 
-    total = filtered[col].sum()
-    return pd.DataFrame({"Collection": [collection], "Month": [f"{month} {year}"], "Total Units": [int(total)]})
+    total = pd.to_numeric(filtered[col], errors="coerce").fillna(0).sum()
+    return pd.DataFrame({"collection": [collection], "month": [f"{month} {year}"], "total_units": [int(total)]})
 
 def top_3_styles(collection, month, year, color=None):
+    coll_col = "style_collection"
+    color_col = "color"
+    style_col = "style_number" if "style_number" in df_forecast.columns else "style"
+    desc_col = "description" if "description" in df_forecast.columns else "product_description"
+
     col = month_column_map.get(f"{month} {year}")
+    for needed in [coll_col, style_col, desc_col, "color"]:
+        if needed not in df_forecast.columns and needed != "color":
+            return pd.DataFrame({"Message": [f"⚠️ Required column '{needed}' not found in forecast file."]})
     if not col or col not in df_forecast.columns:
         return pd.DataFrame({"Message": [f"⚠️ No forecast column for {month} {year}."]})
 
-    filtered = df_forecast[df_forecast["Style_Collection"].str.lower().str.strip() == collection.lower().strip()]
-    if color:
-        filtered = filtered[filtered["Color"].str.lower().str.strip() == color.lower().strip()]
-
+    filtered = df_forecast[df_forecast[coll_col].astype(str).str.lower().str.strip() == collection.lower().strip()]
+    if color and color_col in df_forecast.columns:
+        filtered = filtered[filtered[color_col].astype(str).str.lower().str.strip() == color.lower().strip()]
     if filtered.empty:
         return pd.DataFrame({"Message": [f"⚠️ No data for {collection} in {month} {year}."]})
 
+    filtered[col] = pd.to_numeric(filtered[col], errors="coerce").fillna(0)
     top = filtered.sort_values(by=col, ascending=False).head(3)
-    return top[["Style_Number", "Description", "Color", col]]
+    return top[[style_col, desc_col, color_col, col]].rename(columns={
+        style_col: "style_number",
+        desc_col: "description",
+        color_col: "color",
+        col: col
+    })
 
 def color_performance_for_style(style_number):
-    cols = list(month_column_map.values())
-    filtered = df_forecast[df_forecast["Style_Number"].astype(str).str.strip() == str(style_number).strip()]
+    style_col = "style_number" if "style_number" in df_forecast.columns else "style"
+    color_col = "color"
+    cols = [c for c in month_column_map.values() if c in df_forecast.columns]
+    if not cols:
+        return pd.DataFrame({"Message": ["⚠️ No monthly forecast columns found in forecast file."]})
+
+    filtered = df_forecast[df_forecast[style_col].astype(str).str.strip() == str(style_number).strip()]
     if filtered.empty:
         return pd.DataFrame({"Message": [f"⚠️ No data for style {style_number}."]})
 
-    grouped = filtered.groupby("Color")[cols].sum()
-    grouped["Total_Units"] = grouped.sum(axis=1)
-    grouped = grouped.sort_values("Total_Units", ascending=False)
+    for c in cols:
+        filtered[c] = pd.to_numeric(filtered[c], errors="coerce").fillna(0)
+
+    grouped = filtered.groupby(color_col)[cols].sum()
+    grouped["total_units"] = grouped.sum(axis=1)
+    grouped = grouped.sort_values("total_units", ascending=False)
     return grouped.reset_index()
 
-# ---- MASTER FUNCTIONS ----
+# ---- MASTER FUNCTIONS (use df_master with normalized columns) ----
 def pending_lab_dips():
-    if "Lab_Dip_Status" not in df_master.columns:
-        return pd.DataFrame({"Message": ["⚠️ 'Lab_Dip_Status' column not found."]})
-    pending = df_master[df_master["Lab_Dip_Status"].str.lower() == "pending"]
+    needed = ["lab_dip_status", "style", "product_description", "fabric", "style_vendor"]
+    if "lab_dip_status" not in df_master.columns:
+        return pd.DataFrame({"Message": [f"⚠️ 'lab_dip_status' column not found in master file. Found: {', '.join(df_master.columns)}"]})
+    pending = df_master[df_master["lab_dip_status"].astype(str).str.lower().str.strip() == "pending"]
     if pending.empty:
         return pd.DataFrame({"Message": ["✅ All lab dips are approved."]})
-    return pending[["Style", "Product_Description", "Fabric", "Style_Vendor", "Lab_Dip_Status"]]
+    cols = [c for c in needed if c in df_master.columns]
+    return pending[cols]
 
 def raw_material_expiry_risks():
-    if "RM_Shelf_Life_End" not in df_master.columns:
-        return pd.DataFrame({"Message": ["⚠️ 'RM_Shelf_Life_End' column not found."]})
+    date_col = "rm_shelf_life_end"
+    needed = ["style", "product_description", "category", date_col, "compliance_flag", "notes"]
+    if date_col not in df_master.columns:
+        return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     today = pd.Timestamp.today()
-    risks = df_master[pd.to_datetime(df_master["RM_Shelf_Life_End"], errors="coerce") < today + pd.Timedelta(days=30)]
+    # coerce dates; strings like "n/a" will become NaT
+    dates = pd.to_datetime(df_master[date_col], errors="coerce")
+    risks = df_master[dates < (today + pd.Timedelta(days=30))]
+    risks = risks[dates.notna()]
     if risks.empty:
         return pd.DataFrame({"Message": ["✅ No raw materials expiring within 30 days."]})
-    return risks[["Style", "Product_Description", "Category", "RM_Shelf_Life_End", "Compliance_Flag", "Notes"]]
+    cols = [c for c in needed if c in df_master.columns]
+    return risks[cols]
 
 def sustainable_fabrics(min_percent=50):
-    if "Sustainability_Flag" not in df_master.columns:
-        return pd.DataFrame({"Message": ["⚠️ 'Sustainability_Flag' column not found."]})
-    mask = df_master["Sustainability_Flag"].str.extract(r"(\d+)", expand=False).astype(float)
-    sustainable = df_master[mask.fillna(0) >= min_percent]
+    col = "sustainability_flag"
+    needed = ["style", "product_description", "fabric", col, "style_vendor"]
+    if col not in df_master.columns:
+        return pd.DataFrame({"Message": [f"⚠️ '{col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
+    pct = df_master[col].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+    sustainable = df_master[pct.fillna(0) >= float(min_percent)]
     if sustainable.empty:
         return pd.DataFrame({"Message": [f"⚠️ No fabrics above {min_percent}% recycled content."]})
-    return sustainable[["Style", "Product_Description", "Fabric", "Sustainability_Flag", "Style_Vendor"]]
+    cols = [c for c in needed if c in df_master.columns]
+    return sustainable[cols]
 
 # ---- OPENAI FUNCTIONS ----
 functions = [
@@ -198,20 +258,20 @@ if user_question:
 
                 match name:
                     case "list_available_collections":
-                        st.dataframe(list_available_collections())
+                        st.dataframe(ensure_dataframe(list_available_collections(), "No collections found."))
                     case "forecast_lookup":
-                        st.dataframe(forecast_lookup(**args))
+                        st.dataframe(ensure_dataframe(forecast_lookup(**args), "No forecast found."))
                     case "top_3_styles":
-                        st.dataframe(top_3_styles(**args))
+                        st.dataframe(ensure_dataframe(top_3_styles(**args), "No styles found."))
                     case "color_performance_for_style":
-                        st.dataframe(color_performance_for_style(**args))
+                        st.dataframe(ensure_dataframe(color_performance_for_style(**args), "No color performance found."))
                     case "pending_lab_dips":
-                        st.dataframe(pending_lab_dips())
+                        st.dataframe(ensure_dataframe(pending_lab_dips(), "No pending lab dips."))
                     case "raw_material_expiry_risks":
-                        st.dataframe(raw_material_expiry_risks())
+                        st.dataframe(ensure_dataframe(raw_material_expiry_risks(), "No RM expiry risks."))
                     case "sustainable_fabrics":
                         min_percent = args.get("min_percent", 50)
-                        st.dataframe(sustainable_fabrics(min_percent))
+                        st.dataframe(ensure_dataframe(sustainable_fabrics(min_percent), "No sustainable fabrics found."))
             else:
                 st.success(msg["content"])
         except Exception as e:
