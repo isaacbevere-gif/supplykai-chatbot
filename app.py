@@ -5,22 +5,23 @@ import json
 from PIL import Image
 import os
 import matplotlib.pyplot as plt
+import io
 
 # ---- App Configuration ----
 st.set_page_config(page_title="SupplyKai Forecast Assistant", page_icon="🌀", layout="centered")
 
-# ---- Custom Background Styling ----
+# ---- Background Image ----
 def set_background():
     st.markdown(
-        f"""
+        """
         <style>
-        .stApp {{
-            background-image: url("supplykai_background_image.png");
+        .stApp {
+            background-image: url('supplykai_background_image.png');
             background-size: cover;
-            background-position: center;
             background-repeat: no-repeat;
+            background-position: center;
             background-attachment: fixed;
-        }}
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -28,28 +29,27 @@ def set_background():
 
 set_background()
 
-# ---- Display Logo ----
+# ---- Logo ----
 if os.path.exists("supplykai_logo.png"):
     logo = Image.open("supplykai_logo.png")
     st.image(logo, width=200)
 
-st.title("SupplyKai V.01 (Big4 Monthly Rolling Forecast Assistant)")
-st.caption("Upload your forecast file and ask natural questions about forecasted demand.")
+st.title("📦 SupplyKai Forecast Assistant")
+st.caption("Ask me anything about your rolling forecast.")
 
-# ---- Load OpenAI API Key ----
+# ---- API Key ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# ---- File Upload ----
+# ---- Upload Excel ----
 uploaded_file = st.file_uploader("📁 Upload your Big4RollingForecast.xlsx", type=["xlsx"])
 if uploaded_file is None:
-    st.warning("Please upload your forecast Excel file to continue.")
+    st.warning("Upload your forecast Excel file to continue.")
     st.stop()
 
-# ---- Load Excel File ----
 try:
     df = pd.read_excel(uploaded_file)
 except Exception as e:
-    st.error(f"Failed to read the Excel file: {e}")
+    st.error(f"Failed to load file: {e}")
     st.stop()
 
 # ---- Month Column Map ----
@@ -62,91 +62,117 @@ month_column_map = {
     "September 2026": "FAL26 M3"
 }
 
-# ---- Core Functions ----
-def forecast_lookup(collection: str, month: str, year: int) -> str:
-    full_month = f"{month} {year}"
-    if full_month not in month_column_map:
-        return f"⚠️ Sorry, no forecast data available for {full_month}."
-    target_column = month_column_map[full_month]
-    if target_column not in df.columns:
-        return f"⚠️ The column '{target_column}' is missing from the file."
-    filtered = df[df["Style Collection"].str.strip().str.lower() == collection.lower()]
-    if filtered.empty:
-        return f"⚠️ No data for collection '{collection}'."
-    total = filtered[target_column].sum()
-    return f"📊 Forecast for **{collection}** in **{full_month}** is: **{int(total):,} units**."
+# ---- Helper Functions ----
 
-def total_forecast_for_collection(collection: str) -> str:
-    forecast_cols = list(month_column_map.values())
-    missing = [c for c in forecast_cols if c not in df.columns]
-    if missing:
-        return f"⚠️ Missing columns: {', '.join(missing)}"
-    filtered = df[df["Style Collection"].str.strip().str.lower() == collection.lower()]
-    if filtered.empty:
-        return f"⚠️ No data for collection '{collection}'."
-    total = filtered[forecast_cols].sum().sum()
-    return f"📊 Total forecast for **{collection}** is: **{int(total):,} units**."
-
-def top_collection_for_month(month: str, year: int) -> str:
+def forecast_lookup(collection, month, year):
     full_month = f"{month} {year}"
-    if full_month not in month_column_map:
-        return f"⚠️ No data for {full_month}."
-    col = month_column_map[full_month]
-    if col not in df.columns:
-        return f"⚠️ Missing column '{col}'."
+    col = month_column_map.get(full_month)
+    if not col or col not in df.columns:
+        return f"⚠️ No forecast data for {full_month}."
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty:
+        return f"⚠️ No data for '{collection}'."
+    total = filtered[col].sum()
+    return f"📊 Forecast for **{collection}** in **{full_month}**: **{int(total):,} units**."
+
+def total_forecast_for_collection(collection):
+    cols = list(month_column_map.values())
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty:
+        return f"⚠️ No data for '{collection}'."
+    total = filtered[cols].sum().sum()
+    return f"📊 Total forecast for **{collection}**: **{int(total):,} units**."
+
+def top_collection_for_month(month, year):
+    full_month = f"{month} {year}"
+    col = month_column_map.get(full_month)
+    if not col or col not in df.columns:
+        return f"⚠️ No forecast data for {full_month}."
     grouped = df.groupby("Style Collection")[col].sum().reset_index()
-    if grouped.empty:
-        return "⚠️ No collections found."
     top = grouped.sort_values(by=col, ascending=False).iloc[0]
-    return f"🏆 Highest forecast in **{full_month}**: **{top['Style Collection']}** with **{int(top[col]):,} units**."
+    return f"🏆 Top collection in **{full_month}**: **{top['Style Collection']}** with **{int(top[col]):,} units**."
 
-def top_3_styles(collection: str, month: str, year: int) -> str:
+def top_3_styles(collection, month, year):
     full_month = f"{month} {year}"
-    if full_month not in month_column_map:
-        return f"⚠️ No data for {full_month}."
-    col = month_column_map[full_month]
-    filtered = df[df["Style Collection"].str.strip().str.lower() == collection.lower()]
-    if filtered.empty:
-        return f"⚠️ No data for collection '{collection}'."
-    if col not in filtered.columns:
-        return f"⚠️ Missing column '{col}'."
-    top = filtered.sort_values(by=col, ascending=False).head(3)
-    if top.empty:
-        return f"⚠️ No styles found for {collection}."
-    rows = [f"**{row['Style Number']}**: {int(row[col]):,} units" for _, row in top.iterrows()]
-    return f"🏅 Top 3 styles in **{collection}** for **{full_month}**:\n\n" + "\n\n".join(rows)
-
-def month_to_month_change(collection: str) -> str:
-    forecast_cols = list(month_column_map.values())
-    filtered = df[df["Style Collection"].str.strip().str.lower() == collection.lower()]
-    if filtered.empty:
-        return f"⚠️ No data for collection '{collection}'."
-    totals = filtered[forecast_cols].sum()
-    diffs = totals.diff().fillna(0)
-    report = [f"📈 **{month}**: Δ {int(diffs[col]):,} units"
-              for month, col in month_column_map.items()]
-    return f"📊 Month-over-month change for **{collection}**:\n\n" + "\n".join(report)
-
-def chart_forecast(collection: str):
-    forecast_cols = list(month_column_map.values())
-    filtered = df[df["Style Collection"].str.strip().str.lower() == collection.lower()]
-    if filtered.empty:
-        st.warning(f"No data for collection '{collection}' to show chart.")
+    col = month_column_map.get(full_month)
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty or col not in df.columns:
+        st.warning("No data.")
         return
-    totals = filtered[forecast_cols].sum()
+    top = filtered.sort_values(by=col, ascending=False).head(3)
+    top["Label"] = top["Style Number"].astype(str) + " – " + top["Description"]
+    st.subheader(f"🏅 Top 3 styles in {collection} for {full_month}")
+    st.bar_chart(top.set_index("Label")[col])
+    st.dataframe(top[["Style Number", "Description", col]])
+    csv = top[["Style Number", "Description", col]].to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Download CSV", csv, file_name=f"top_styles_{collection}_{month}_{year}.csv")
+
+def month_to_month_change(collection):
+    cols = list(month_column_map.values())
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty:
+        return f"⚠️ No data for '{collection}'."
+    totals = filtered[cols].sum()
+    diffs = totals.diff().fillna(0)
+    output = [f"📈 **{m}**: Δ {int(diffs[c]):,} units" for m, c in month_column_map.items()]
+    return f"📊 Month-over-month change for **{collection}**:\n\n" + "\n".join(output)
+
+def chart_forecast(collection):
+    cols = list(month_column_map.values())
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty:
+        st.warning(f"No data for '{collection}'.")
+        return
+    totals = filtered[cols].sum()
     plt.figure(figsize=(8, 4))
-    plt.plot(list(month_column_map.keys()), totals.values, marker='o', color='#1f77b4')
-    plt.title(f"📈 Forecast Trend for {collection}")
+    plt.plot(list(month_column_map.keys()), totals.values, marker='o')
+    plt.title(f"Forecast Trend for {collection}")
     plt.xlabel("Month")
     plt.ylabel("Units")
     plt.grid(True)
     st.pyplot(plt)
 
-# ---- Define Functions for OpenAI ----
+def compare_collections(collection1, collection2, month, year):
+    full_month = f"{month} {year}"
+    col = month_column_map.get(full_month)
+    if not col or col not in df.columns:
+        return f"⚠️ Invalid month."
+    df1 = df[df["Style Collection"].str.lower() == collection1.lower()]
+    df2 = df[df["Style Collection"].str.lower() == collection2.lower()]
+    sum1 = df1[col].sum() if not df1.empty else 0
+    sum2 = df2[col].sum() if not df2.empty else 0
+    return (
+        f"📊 Forecast comparison for **{full_month}**:\n\n"
+        f"- **{collection1}**: {int(sum1):,} units\n"
+        f"- **{collection2}**: {int(sum2):,} units\n\n"
+        f"📈 {'🔼' if sum1 > sum2 else '🔽'} **{'{0} leads'.format(collection1) if sum1 > sum2 else '{0} leads'.format(collection2)}**"
+    )
+
+def export_color_breakdown(collection):
+    cols = list(month_column_map.values())
+    filtered = df[df["Style Collection"].str.lower() == collection.lower()]
+    if filtered.empty:
+        st.warning(f"No data for '{collection}'.")
+        return
+    color_summary = filtered.groupby("Color")[cols].sum()
+    color_summary["Total"] = color_summary.sum(axis=1)
+    color_summary = color_summary.sort_values(by="Total", ascending=False)
+    st.subheader(f"🎨 Color Breakdown for {collection}")
+    st.dataframe(color_summary)
+
+    csv = color_summary.reset_index().to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Download Color Breakdown CSV",
+        data=csv,
+        file_name=f"color_breakdown_{collection}.csv",
+        mime="text/csv"
+    )
+
+# ---- OpenAI Function Schema ----
 functions = [
     {
         "name": "forecast_lookup",
-        "description": "Get forecasted demand for a specific style collection and month",
+        "description": "Get forecast for a collection and month",
         "parameters": {
             "type": "object",
             "properties": {
@@ -162,15 +188,13 @@ functions = [
         "description": "Get total forecast for a collection",
         "parameters": {
             "type": "object",
-            "properties": {
-                "collection": {"type": "string"}
-            },
+            "properties": {"collection": {"type": "string"}},
             "required": ["collection"]
         }
     },
     {
         "name": "top_collection_for_month",
-        "description": "Get collection with highest forecast in a month",
+        "description": "Get collection with highest forecast",
         "parameters": {
             "type": "object",
             "properties": {
@@ -195,29 +219,48 @@ functions = [
     },
     {
         "name": "month_to_month_change",
-        "description": "Get month-to-month change for a collection",
+        "description": "Get MoM change for a collection",
         "parameters": {
             "type": "object",
-            "properties": {
-                "collection": {"type": "string"}
-            },
+            "properties": {"collection": {"type": "string"}},
             "required": ["collection"]
         }
     },
     {
         "name": "chart_forecast",
-        "description": "Show line chart for a collection's forecast over months",
+        "description": "Show a chart for a collection",
+        "parameters": {
+            "type": "object",
+            "properties": {"collection": {"type": "string"}},
+            "required": ["collection"]
+        }
+    },
+    {
+        "name": "compare_collections",
+        "description": "Compare forecasts between two collections",
         "parameters": {
             "type": "object",
             "properties": {
-                "collection": {"type": "string"}
+                "collection1": {"type": "string"},
+                "collection2": {"type": "string"},
+                "month": {"type": "string"},
+                "year": {"type": "integer"}
             },
+            "required": ["collection1", "collection2", "month", "year"]
+        }
+    },
+    {
+        "name": "export_color_breakdown",
+        "description": "Show and download color breakdown for a collection",
+        "parameters": {
+            "type": "object",
+            "properties": {"collection": {"type": "string"}},
             "required": ["collection"]
         }
     }
 ]
 
-# ---- Handle User Questions ----
+# ---- User Question Input ----
 user_question = st.text_input("💬 Ask your forecast question:")
 
 if user_question:
@@ -229,31 +272,33 @@ if user_question:
                 functions=functions,
                 function_call="auto"
             )
-            message = response.choices[0].message
-            if message.get("function_call"):
-                name = message["function_call"]["name"]
-                args = json.loads(message["function_call"]["arguments"])
-                if name == "forecast_lookup":
-                    answer = forecast_lookup(**args)
-                    st.success(answer)
-                elif name == "total_forecast_for_collection":
-                    answer = total_forecast_for_collection(**args)
-                    st.success(answer)
-                elif name == "top_collection_for_month":
-                    answer = top_collection_for_month(**args)
-                    st.success(answer)
-                elif name == "top_3_styles":
-                    answer = top_3_styles(**args)
-                    st.success(answer)
-                elif name == "month_to_month_change":
-                    answer = month_to_month_change(**args)
-                    st.success(answer)
-                elif name == "chart_forecast":
-                    chart_forecast(**args)
+            msg = response.choices[0].message
+            if msg.get("function_call"):
+                name = msg["function_call"]["name"]
+                args = json.loads(msg["function_call"]["arguments"])
+                match name:
+                    case "forecast_lookup":
+                        st.success(forecast_lookup(**args))
+                    case "total_forecast_for_collection":
+                        st.success(total_forecast_for_collection(**args))
+                    case "top_collection_for_month":
+                        st.success(top_collection_for_month(**args))
+                    case "top_3_styles":
+                        top_3_styles(**args)
+                    case "month_to_month_change":
+                        st.success(month_to_month_change(**args))
+                    case "chart_forecast":
+                        chart_forecast(**args)
+                    case "compare_collections":
+                        st.success(compare_collections(**args))
+                    case "export_color_breakdown":
+                        export_color_breakdown(**args)
             else:
-                st.success(message["content"])
+                st.success(msg["content"])
         except Exception as e:
-            st.error(f"An error occurred:\n\n{e}")
+            st.error(f"❌ Error: {e}")
+
+
 
 
 
