@@ -13,6 +13,35 @@ st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout
 
 # ---- BACKGROUND IMAGE (JPEG) ----
 def set_background():
+    def set_custom_styles():
+    st.markdown(
+        """
+        <style>
+        html, body, [class*="css"] {
+            color: black !important;
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+
+        /* Question input box */
+        .stTextInput > div > div > input {
+            background-color: white !important;
+            color: black !important;
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+
+        /* Buttons, labels, etc */
+        .stButton > button {
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+
+        .stMarkdown, .stDataFrame, .stDownloadButton {
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     file_path = "supplykai_background_image.jpg"
     if os.path.exists(file_path):
         with open(file_path, "rb") as f:
@@ -258,6 +287,7 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
