@@ -34,7 +34,7 @@ set_background()
 logo = Image.open("supplykai_logo.png.png")
 st.image(logo, width=200)
 
-st.title("📦 SupplyKai Forecast Assistant")
+st.title("SupplyKai V.01 (Big4 Monthly Rolling Forecast Assistant)")
 st.caption("Upload your forecast file and ask natural questions about forecasted demand.")
 
 # ---- Load OpenAI API Key ----
@@ -209,6 +209,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"An error occurred while processing your question:\n\n{e}")
+
 
 
 
