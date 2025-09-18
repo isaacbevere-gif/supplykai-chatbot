@@ -9,7 +9,7 @@ import io
 import re
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Assistant v.05", layout="centered")
+st.set_page_config(page_title="SupplyKai Lite v.06", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
@@ -27,7 +27,7 @@ def show_logo():
 show_logo()
 
 # ---- TITLE ----
-st.title("SupplyKai Assistant v.05")
+st.title("SupplyKai Lite v.06")
 st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask domain-specific questions.")
 
 # ---- OPENAI API KEY ----
@@ -40,9 +40,9 @@ def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     new_cols = []
     for c in df.columns.astype(str):
         c2 = c.strip()
-        c2 = c2.replace("\u00A0", " ")  # non-breaking space -> space
+        c2 = c2.replace("\u00A0", " ")  # non-breaking space
         c2 = c2.lower()
-        c2 = re.sub(r"[^a-z0-9]+", "_", c2)  # anything not a-z0-9 -> underscore
+        c2 = re.sub(r"[^a-z0-9]+", "_", c2)  # replace non-alphanum
         c2 = c2.strip("_")
         new_cols.append(c2)
     df.columns = new_cols
@@ -57,7 +57,6 @@ def ensure_dataframe(obj, fallback_message):
 # ---- FILE UPLOADS ----
 st.subheader("📂 Upload Data Files")
 uploaded_master = st.file_uploader("Upload Master Dataset (CSV)", type=["csv"])
-df_master_raw = pd.read_csv(uploaded_master, sep=None, engine="python")
 uploaded_forecast = st.file_uploader("Upload Forecast Dataset (Excel)", type=["xlsx"])
 
 if not uploaded_master or not uploaded_forecast:
@@ -66,7 +65,8 @@ if not uploaded_master or not uploaded_forecast:
 
 # ---- READ & NORMALIZE FILES ----
 try:
-    df_master_raw = pd.read_csv(uploaded_master)
+    # FIX: auto-detect delimiter for CSV
+    df_master_raw = pd.read_csv(uploaded_master, sep=None, engine="python")
     df_master = canonicalize_columns(df_master_raw)
 except Exception as e:
     st.error(f"Error reading Master CSV: {e}")
@@ -89,23 +89,7 @@ with st.expander("🔎 Data preview & column inspector"):
     st.write(list(df_forecast.columns))
     st.dataframe(df_forecast.head())
 
-# ---- EXPORT TO PDF ----
-def export_table_to_pdf(dataframe, title):
-    from matplotlib.backends.backend_pdf import PdfPages
-    fig, ax = plt.subplots(figsize=(8.5, 3 + len(dataframe) * 0.5))
-    ax.axis("off")
-    table = ax.table(cellText=dataframe.values, colLabels=dataframe.columns, loc="center")
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    plt.title(title, fontsize=12)
-    output = io.BytesIO()
-    with PdfPages(output) as pdf:
-        pdf.savefig(fig, bbox_inches='tight')
-    output.seek(0)
-    return output
-
-# ---- MONTH COLUMN MAPPING (normalized) ----
-# Note: after normalization, "SU26 M1" -> "su26_m1", etc.
+# ---- MONTH COLUMN MAPPING ----
 month_column_map = {
     "April 2026": "su26_m1",
     "May 2026": "su26_m2",
@@ -115,7 +99,7 @@ month_column_map = {
     "September 2026": "fal26_m3"
 }
 
-# ---- FORECAST FUNCTIONS (use df_forecast with normalized columns) ----
+# ---- FORECAST FUNCTIONS ----
 def list_available_collections():
     col = "style_collection"
     if col not in df_forecast.columns:
@@ -150,9 +134,6 @@ def top_3_styles(collection, month, year, color=None):
     desc_col = "description" if "description" in df_forecast.columns else "product_description"
 
     col = month_column_map.get(f"{month} {year}")
-    for needed in [coll_col, style_col, desc_col, "color"]:
-        if needed not in df_forecast.columns and needed != "color":
-            return pd.DataFrame({"Message": [f"⚠️ Required column '{needed}' not found in forecast file."]})
     if not col or col not in df_forecast.columns:
         return pd.DataFrame({"Message": [f"⚠️ No forecast column for {month} {year}."]})
 
@@ -190,43 +171,36 @@ def color_performance_for_style(style_number):
     grouped = grouped.sort_values("total_units", ascending=False)
     return grouped.reset_index()
 
-# ---- MASTER FUNCTIONS (use df_master with normalized columns) ----
+# ---- MASTER FUNCTIONS ----
 def pending_lab_dips():
-    needed = ["lab_dip_status", "style", "product_description", "fabric", "style_vendor"]
     if "lab_dip_status" not in df_master.columns:
         return pd.DataFrame({"Message": [f"⚠️ 'lab_dip_status' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     pending = df_master[df_master["lab_dip_status"].astype(str).str.lower().str.strip() == "pending"]
     if pending.empty:
         return pd.DataFrame({"Message": ["✅ All lab dips are approved."]})
-    cols = [c for c in needed if c in df_master.columns]
-    return pending[cols]
+    return pending[[c for c in ["style", "product_description", "fabric", "style_vendor", "lab_dip_status"] if c in df_master.columns]]
 
 def raw_material_expiry_risks():
     date_col = "rm_shelf_life_end"
-    needed = ["style", "product_description", "category", date_col, "compliance_flag", "notes"]
     if date_col not in df_master.columns:
         return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     today = pd.Timestamp.today()
-    # coerce dates; strings like "n/a" will become NaT
     dates = pd.to_datetime(df_master[date_col], errors="coerce")
     risks = df_master[dates < (today + pd.Timedelta(days=30))]
     risks = risks[dates.notna()]
     if risks.empty:
         return pd.DataFrame({"Message": ["✅ No raw materials expiring within 30 days."]})
-    cols = [c for c in needed if c in df_master.columns]
-    return risks[cols]
+    return risks[[c for c in ["style", "product_description", "category", date_col, "compliance_flag", "notes"] if c in df_master.columns]]
 
 def sustainable_fabrics(min_percent=50):
     col = "sustainability_flag"
-    needed = ["style", "product_description", "fabric", col, "style_vendor"]
     if col not in df_master.columns:
         return pd.DataFrame({"Message": [f"⚠️ '{col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     pct = df_master[col].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
     sustainable = df_master[pct.fillna(0) >= float(min_percent)]
     if sustainable.empty:
         return pd.DataFrame({"Message": [f"⚠️ No fabrics above {min_percent}% recycled content."]})
-    cols = [c for c in needed if c in df_master.columns]
-    return sustainable[cols]
+    return sustainable[[c for c in ["style", "product_description", "fabric", col, "style_vendor"] if c in df_master.columns]]
 
 # ---- OPENAI FUNCTIONS ----
 functions = [
@@ -277,4 +251,3 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
-
