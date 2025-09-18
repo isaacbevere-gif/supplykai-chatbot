@@ -74,6 +74,38 @@ def total_forecast_for_collection(collection: str) -> str:
 
     return f"📊 Total forecast for **{collection}** across all months is: **{int(total):,} units**."
 
+# ---- Top Collection in a Given Month ----
+def top_collection_for_month(month: str, year: int) -> str:
+    month_column_map = {
+        "April 2026": "SU26 M1",
+        "May 2026": "SU26 M2",
+        "June 2026": "SU26 M3",
+        "July 2026": "FAL26 M1",
+        "August 2026": "FAL26 M2",
+        "September 2026": "FAL26 M3"
+    }
+
+    full_month = f"{month} {year}"
+    if full_month not in month_column_map:
+        return f"⚠️ Sorry, no forecast data available for {full_month}."
+
+    target_column = month_column_map[full_month]
+
+    if target_column not in df.columns:
+        return f"⚠️ The column '{target_column}' is missing from the uploaded file."
+
+    grouped = df.groupby("Style Collection")[target_column].sum().reset_index()
+
+    if grouped.empty:
+        return "⚠️ No collections found in the data."
+
+    top_row = grouped.sort_values(by=target_column, ascending=False).iloc[0]
+
+    top_collection = top_row["Style Collection"]
+    top_value = int(top_row[target_column])
+
+    return f"🏆 The collection with the highest forecast in **{full_month}** is **{top_collection}** with **{top_value:,} units**."
+
 # ---- Define Functions for OpenAI ----
 functions = [
     {
@@ -111,6 +143,24 @@ functions = [
             },
             "required": ["collection"]
         }
+    },
+    {
+        "name": "top_collection_for_month",
+        "description": "Find the collection with the highest forecast in a specific month",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "month": {
+                    "type": "string",
+                    "description": "Full month name, e.g. 'September'"
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "Year, e.g. 2026"
+                }
+            },
+            "required": ["month", "year"]
+        }
     }
 ]
 
@@ -138,6 +188,8 @@ if user_question:
                     answer = forecast_lookup(**args)
                 elif function_name == "total_forecast_for_collection":
                     answer = total_forecast_for_collection(**args)
+                elif function_name == "top_collection_for_month":
+                    answer = top_collection_for_month(**args)
                 else:
                     answer = f"⚠️ Function '{function_name}' is not implemented."
             else:
@@ -147,3 +199,10 @@ if user_question:
 
         except Exception as e:
             st.error(f"An error occurred while processing your question:\n\n{e}")
+
+
+            st.success(answer)
+
+        except Exception as e:
+            st.error(f"An error occurred while processing your question:\n\n{e}")
+
