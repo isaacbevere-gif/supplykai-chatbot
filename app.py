@@ -9,7 +9,7 @@ import io
 import re
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Lite v.07", layout="centered")
+st.set_page_config(page_title="SupplyKai Lite v.09", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
@@ -27,8 +27,8 @@ def show_logo():
 show_logo()
 
 # ---- TITLE ----
-st.title("SupplyKai Lite v.07")
-st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask domain-specific questions.")
+st.title("SupplyKai Lite v.09 (Hybrid Mode)")
+st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask supply chain questions in Structured or General Q&A mode.")
 
 # ---- OPENAI API KEY ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -65,7 +65,6 @@ if not uploaded_master or not uploaded_forecast:
 
 # ---- READ & NORMALIZE FILES ----
 try:
-    # FIX: auto-detect delimiter for CSV
     df_master_raw = pd.read_csv(uploaded_master, sep=None, engine="python")
     df_master = canonicalize_columns(df_master_raw)
 except Exception as e:
@@ -127,6 +126,13 @@ def forecast_lookup(collection, month, year, color=None):
     total = pd.to_numeric(filtered[col], errors="coerce").fillna(0).sum()
     return pd.DataFrame({"collection": [collection], "month": [f"{month} {year}"], "total_units": [int(total)]})
 
+def total_forecast(month, year):
+    col = month_column_map.get(f"{month} {year}")
+    if not col or col not in df_forecast.columns:
+        return pd.DataFrame({"Message": [f"⚠️ No forecast column for {month} {year}."]})
+    total = pd.to_numeric(df_forecast[col], errors="coerce").fillna(0).sum()
+    return pd.DataFrame({"month": [f"{month} {year}"], "total_forecast_units": [int(total)]})
+
 def top_3_styles(collection, month, year, color=None):
     coll_col = "style_collection"
     color_col = "color"
@@ -186,9 +192,7 @@ def raw_material_expiry_risks():
         return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
     
     today = pd.Timestamp.today()
-    # Force text cleanup
     dates_raw = df_master[date_col].astype(str).str.strip().replace({"nan": None, "n/a": None, "NaT": None, "—": None})
-    # Parse with flexible format inference
     dates = pd.to_datetime(dates_raw, errors="coerce", infer_datetime_format=True)
 
     risks = df_master[(dates.notna()) & (dates < (today + pd.Timedelta(days=30)))]
@@ -211,6 +215,7 @@ def sustainable_fabrics(min_percent=50):
 functions = [
     {"name": "list_available_collections", "description": "List all unique collections", "parameters": {"type": "object", "properties": {}}},
     {"name": "forecast_lookup", "description": "Get forecast for a collection and month", "parameters": {"type": "object","properties": {"collection": {"type": "string"},"month": {"type": "string"},"year": {"type": "integer"},"color": {"type": "string"}}, "required": ["collection", "month", "year"]}},
+    {"name": "total_forecast", "description": "Get total forecast across all collections for a given month", "parameters": {"type": "object","properties": {"month": {"type": "string"},"year": {"type": "integer"}}, "required": ["month", "year"]}},
     {"name": "top_3_styles", "description": "Top 3 styles in a collection for a month", "parameters": {"type": "object","properties": {"collection": {"type": "string"},"month": {"type": "string"},"year": {"type": "integer"},"color": {"type": "string"}}, "required": ["collection", "month", "year"]}},
     {"name": "color_performance_for_style", "description": "Show color-level forecast for a style number", "parameters": {"type": "object","properties": {"style_number": {"type": "string"}}, "required": ["style_number"]}},
     {"name": "pending_lab_dips", "description": "List all styles with pending lab dip approvals", "parameters": {"type": "object", "properties": {}}},
@@ -218,8 +223,9 @@ functions = [
     {"name": "sustainable_fabrics", "description": "Show fabrics with sustainability above a threshold", "parameters": {"type": "object","properties": {"min_percent": {"type": "integer"}}, "required": []}}
 ]
 
-# ---- CHAT INTERFACE ----
-user_question = st.text_input("💬 Ask your supply chain question:")
+# ---- STRUCTURED CHAT INTERFACE ----
+st.subheader("📊 Structured Q&A Mode")
+user_question = st.text_input("💬 Ask your supply chain question (structured):")
 
 if user_question:
     with st.spinner("Thinking..."):
@@ -241,6 +247,8 @@ if user_question:
                         st.dataframe(ensure_dataframe(list_available_collections(), "No collections found."))
                     case "forecast_lookup":
                         st.dataframe(ensure_dataframe(forecast_lookup(**args), "No forecast found."))
+                    case "total_forecast":
+                        st.dataframe(ensure_dataframe(total_forecast(**args), "No total forecast found."))
                     case "top_3_styles":
                         st.dataframe(ensure_dataframe(top_3_styles(**args), "No styles found."))
                     case "color_performance_for_style":
@@ -257,3 +265,25 @@ if user_question:
         except Exception as e:
             st.error(f"❌ Error: {e}")
 
+# ---- GENERAL Q&A MODE ----
+st.markdown("---")
+st.subheader("🤖 General Q&A Mode (Free-form)")
+
+general_question = st.text_input("💬 Ask any question about your datasets (free-form):")
+
+if general_question:
+    with st.spinner("Thinking with data..."):
+        try:
+            master_preview = df_master.head(10).to_string()
+            forecast_preview = df_forecast.head(10).to_string()
+
+            response = openai.ChatCompletion.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a supply chain analyst AI. Use the provided dataframes to answer questions. If unsure, explain what data is missing."},
+                    {"role": "user", "content": f"Question: {general_question}\n\nHere are the first rows of df_master:\n{master_preview}\n\nHere are the first rows of df_forecast:\n{forecast_preview}"}
+                ]
+            )
+            st.write(response.choices[0].message["content"])
+        except Exception as e:
+            st.error(f"❌ Error in Q&A mode: {e}")
