@@ -52,10 +52,10 @@ def set_custom_styles():
             border: 1px solid #ccc !important;
         }
 
-        /* Make all buttons use black font by default */
+        /* Make all buttons use white font by default */
         .stButton > button, .stDownloadButton > button {
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-            color: black !important;
+            color: white !important;
         }
 
         /* Exception: make the "Browse files" button font white */
@@ -316,6 +316,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
