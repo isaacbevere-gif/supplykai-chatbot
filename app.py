@@ -97,13 +97,27 @@ def set_custom_styles():
         unsafe_allow_html=True
     )
 
+# ---- DEFINE LOGO FUNCTION ----
+def show_logo():
+    logo_path = "supplykai_logo.png"
+    if os.path.exists(logo_path):
+        st.markdown(
+            f"""
+            <div style="display: flex; justify-content: center;">
+                <img src="data:image/png;base64,{base64.b64encode(open(logo_path, "rb").read()).decode()}" width="200">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 # ---- RUN STYLES + LOGO ----
 set_background()
 set_custom_styles()
-    def show_logo()
+show_logo()
 
 st.title("SupplyKai Assistant v.01 (Big4 Monthly Rolling Forecast)")
 st.caption("Upload your forecast file and ask your questions.")
+
 # ---- OPENAI API ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
@@ -118,7 +132,7 @@ try:
 except Exception as e:
     st.error(f"Error reading file: {e}")
     st.stop()
-
+    
 # ---- MONTH COLUMN MAPPING ----
 month_column_map = {
     "April 2026": "SU26 M1",
@@ -325,6 +339,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
