@@ -13,7 +13,7 @@ st.set_page_config(page_title="SupplyKai Assistant v.01", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
-    logo_path = "supplykai_logo.png"
+    logo_path = "supplykai_logo.png.png"
     if os.path.exists(logo_path):
         st.markdown(
             f"""
@@ -250,6 +250,7 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
