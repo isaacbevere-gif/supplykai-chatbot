@@ -100,7 +100,7 @@ def set_custom_styles():
 # ---- RUN STYLES + LOGO ----
 set_background()
 set_custom_styles()
-def show_logo()
+    def show_logo()
 
 st.title("SupplyKai Assistant v.01 (Big4 Monthly Rolling Forecast)")
 st.caption("Upload your forecast file and ask your questions.")
@@ -325,6 +325,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
