@@ -2,14 +2,13 @@ import streamlit as st
 import pandas as pd
 import openai
 import json
-from PIL import Image
 import os
 import matplotlib.pyplot as plt
 import base64
 import io
 
 # ---- PAGE CONFIG ----
-st.set_page_config(page_title="SupplyKai Assistant v.02", layout="centered")
+st.set_page_config(page_title="SupplyKai Assistant v.03", layout="centered")
 
 # ---- LOGO ----
 def show_logo():
@@ -27,25 +26,32 @@ def show_logo():
 show_logo()
 
 # ---- TITLE ----
-st.title("SupplyKai Assistant v.02")
-st.caption("Upload your unified dataset and ask domain-specific questions.")
+st.title("SupplyKai Assistant v.03")
+st.caption("Upload your Forecast (Excel) and Master (CSV) datasets, then ask domain-specific questions.")
 
 # ---- OPENAI API KEY ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# ---- FILE UPLOAD ----
-uploaded_file = st.file_uploader("📁 Upload your dataset (Products_Master.csv or .xlsx)", type=["csv", "xlsx"])
-if uploaded_file is None:
-    st.warning("Please upload a dataset.")
+# ---- FILE UPLOADS ----
+st.subheader("📂 Upload Data Files")
+uploaded_master = st.file_uploader("Upload Master Dataset (CSV)", type=["csv"])
+uploaded_forecast = st.file_uploader("Upload Forecast Dataset (Excel)", type=["xlsx"])
+
+if not uploaded_master or not uploaded_forecast:
+    st.warning("Please upload both a Master CSV and a Forecast Excel file.")
+    st.stop()
+
+# ---- READ FILES ----
+try:
+    df_master = pd.read_csv(uploaded_master)
+except Exception as e:
+    st.error(f"Error reading Master CSV: {e}")
     st.stop()
 
 try:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    df_forecast = pd.read_excel(uploaded_forecast)
 except Exception as e:
-    st.error(f"Error reading file: {e}")
+    st.error(f"Error reading Forecast Excel: {e}")
     st.stop()
 
 # ---- EXPORT TO PDF ----
@@ -63,37 +69,80 @@ def export_table_to_pdf(dataframe, title):
     output.seek(0)
     return output
 
-# ---- EXISTING FORECAST FUNCTIONS ----
+# ---- MONTH COLUMN MAPPING ----
+month_column_map = {
+    "April 2026": "SU26 M1",
+    "May 2026": "SU26 M2",
+    "June 2026": "SU26 M3",
+    "July 2026": "FAL26 M1",
+    "August 2026": "FAL26 M2",
+    "September 2026": "FAL26 M3"
+}
+
+# ---- FORECAST FUNCTIONS (use df_forecast) ----
 def list_available_collections():
-    if "Style Collection" not in df.columns:
+    if "Style Collection" not in df_forecast.columns:
         return "⚠️ 'Style Collection' column not found."
-    collections = df["Style Collection"].dropna().unique()
+    collections = df_forecast["Style Collection"].dropna().unique()
     collections = sorted([str(c).strip() for c in collections])
     return "Available collections:\n\n" + "\n".join(f"- {c}" for c in collections)
 
-# ---- NEW FUNCTIONS (Unified Dataset) ----
+def forecast_lookup(collection, month, year, color=None):
+    col = month_column_map.get(f"{month} {year}")
+    filtered = df_forecast[df_forecast["Style Collection"].str.lower().str.strip() == collection.lower().strip()]
+    if color:
+        filtered = filtered[filtered["Color"].str.lower().str.strip() == color.lower().strip()]
+    if not col or col not in df_forecast.columns or filtered.empty:
+        return f"⚠️ No data for {collection} in {month} {year}."
+    total = filtered[col].sum()
+    label = f"{collection} in {month} {year}"
+    if color:
+        label += f" (Color: {color})"
+    return f"📊 Forecast for **{label}**: **{int(round(total)):,} units**."
+
+def top_3_styles(collection, month, year, color=None):
+    col = month_column_map.get(f"{month} {year}")
+    filtered = df_forecast[df_forecast["Style Collection"].str.lower().str.strip() == collection.lower().strip()]
+    if color:
+        filtered = filtered[filtered["Color"].str.lower().str.strip() == color.lower().strip()]
+    if not col or col not in df_forecast.columns or filtered.empty:
+        return f"⚠️ No data for {collection} in {month} {year}."
+    top = filtered.sort_values(by=col, ascending=False).head(3)
+    return top[["Style Number", "Description", "Color", col]]
+
+def color_performance_for_style(style_number):
+    cols = list(month_column_map.values())
+    filtered = df_forecast[df_forecast["Style Number"].astype(str).str.strip() == str(style_number).strip()]
+    if filtered.empty:
+        return f"⚠️ No data for style {style_number}."
+    grouped = filtered.groupby("Color")[cols].sum()
+    grouped["Total Units"] = grouped.sum(axis=1)
+    grouped = grouped.sort_values("Total Units", ascending=False)
+    return grouped.reset_index()
+
+# ---- MASTER DATA FUNCTIONS (use df_master) ----
 def pending_lab_dips():
-    if "Lab_Dip_Status" not in df.columns:
+    if "Lab_Dip_Status" not in df_master.columns:
         return "⚠️ 'Lab_Dip_Status' column not found."
-    pending = df[df["Lab_Dip_Status"].str.lower() == "pending"]
+    pending = df_master[df_master["Lab_Dip_Status"].str.lower() == "pending"]
     if pending.empty:
         return "✅ All lab dips are approved."
     return pending[["Style", "Product_Description", "Fabric", "Style Vendor", "Lab_Dip_Status"]]
 
 def raw_material_expiry_risks():
-    if "RM_Shelf_Life_End" not in df.columns:
+    if "RM_Shelf_Life_End" not in df_master.columns:
         return "⚠️ 'RM_Shelf_Life_End' column not found."
     today = pd.Timestamp.today()
-    risks = df[pd.to_datetime(df["RM_Shelf_Life_End"], errors="coerce") < today + pd.Timedelta(days=30)]
+    risks = df_master[pd.to_datetime(df_master["RM_Shelf_Life_End"], errors="coerce") < today + pd.Timedelta(days=30)]
     if risks.empty:
         return "✅ No raw materials expiring within 30 days."
     return risks[["Style", "Product_Description", "Category", "RM_Shelf_Life_End", "Compliance_Flag", "Notes"]]
 
 def sustainable_fabrics(min_percent=50):
-    if "Sustainability_Flag" not in df.columns:
+    if "Sustainability_Flag" not in df_master.columns:
         return "⚠️ 'Sustainability_Flag' column not found."
-    mask = df["Sustainability_Flag"].str.extract(r"(\d+)", expand=False).astype(float)
-    sustainable = df[mask.fillna(0) >= min_percent]
+    mask = df_master["Sustainability_Flag"].str.extract(r"(\d+)", expand=False).astype(float)
+    sustainable = df_master[mask.fillna(0) >= min_percent]
     if sustainable.empty:
         return f"⚠️ No fabrics above {min_percent}% recycled content."
     return sustainable[["Style", "Product_Description", "Fabric", "Sustainability_Flag", "Style Vendor"]]
@@ -102,8 +151,45 @@ def sustainable_fabrics(min_percent=50):
 functions = [
     {
         "name": "list_available_collections",
-        "description": "List all unique collections from the uploaded file",
+        "description": "List all unique collections from the forecast file",
         "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "forecast_lookup",
+        "description": "Get forecast for a collection and month, optionally filtered by color",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "collection": {"type": "string"},
+                "month": {"type": "string"},
+                "year": {"type": "integer"},
+                "color": {"type": "string"}
+            },
+            "required": ["collection", "month", "year"]
+        }
+    },
+    {
+        "name": "top_3_styles",
+        "description": "Top 3 styles in a collection for a month, optionally filtered by color",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "collection": {"type": "string"},
+                "month": {"type": "string"},
+                "year": {"type": "integer"},
+                "color": {"type": "string"}
+            },
+            "required": ["collection", "month", "year"]
+        }
+    },
+    {
+        "name": "color_performance_for_style",
+        "description": "Show color-level forecast for a style number",
+        "parameters": {
+            "type": "object",
+            "properties": {"style_number": {"type": "string"}},
+            "required": ["style_number"]
+        }
     },
     {
         "name": "pending_lab_dips",
@@ -147,6 +233,12 @@ if user_question:
                 match name:
                     case "list_available_collections":
                         st.success(list_available_collections())
+                    case "forecast_lookup":
+                        st.success(forecast_lookup(**args))
+                    case "top_3_styles":
+                        st.dataframe(top_3_styles(**args))
+                    case "color_performance_for_style":
+                        st.dataframe(color_performance_for_style(**args))
                     case "pending_lab_dips":
                         st.dataframe(pending_lab_dips())
                     case "raw_material_expiry_risks":
@@ -158,36 +250,3 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
