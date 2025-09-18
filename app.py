@@ -31,7 +31,7 @@ def set_background():
 set_background()
 
 # ---- Display Logo ----
-logo = Image.open("supplykai_logo.png")
+logo = Image.open("supplykai_logo.png.png")
 st.image(logo, width=200)
 
 st.title("📦 SupplyKai Forecast Assistant")
@@ -209,5 +209,6 @@ if user_question:
 
         except Exception as e:
             st.error(f"An error occurred while processing your question:\n\n{e}")
+
 
 
