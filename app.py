@@ -183,13 +183,18 @@ def pending_lab_dips():
 def raw_material_expiry_risks():
     date_col = "rm_shelf_life_end"
     if date_col not in df_master.columns:
-        return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found in master file. Found: {', '.join(df_master.columns)}"]})
+        return pd.DataFrame({"Message": [f"⚠️ '{date_col}' column not found. Found: {', '.join(df_master.columns)}"]})
+    
     today = pd.Timestamp.today()
-    dates = pd.to_datetime(df_master[date_col], errors="coerce")
-    risks = df_master[dates < (today + pd.Timedelta(days=30))]
-    risks = risks[dates.notna()]
+    # Force MM/DD/YYYY parsing
+    dates = pd.to_datetime(df_master[date_col], errors="coerce", format="%m/%d/%Y")
+    
+    st.write("🔎 Parsed RM Shelf Life End values:", dates.head(10))  # Debug line
+
+    risks = df_master[(dates.notna()) & (dates < (today + pd.Timedelta(days=30)))]
     if risks.empty:
         return pd.DataFrame({"Message": ["✅ No raw materials expiring within 30 days."]})
+    
     return risks[[c for c in ["style", "product_description", "category", date_col, "compliance_flag", "notes"] if c in df_master.columns]]
 
 def sustainable_fabrics(min_percent=50):
@@ -251,3 +256,4 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
