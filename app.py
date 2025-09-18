@@ -18,11 +18,11 @@ def set_custom_styles():
         <style>
         html, body, .stApp {
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-            color: black !important;
+            color: white !important;
         }
 
         .stMarkdown h6, .stCaption {
-            color: black !important;
+            color: white !important;
         }
 
         input[type="text"], textarea, .stTextInput input {
@@ -278,6 +278,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
