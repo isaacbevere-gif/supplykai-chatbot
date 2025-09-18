@@ -37,22 +37,39 @@ def set_custom_styles():
     st.markdown(
         """
         <style>
+
+        /* Global font and color */
         html, body, .stApp {
             color: black !important;
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
         }
+
+        /* Input boxes */
         input[type="text"], textarea, .stTextInput input {
             background-color: white !important;
             color: black !important;
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+            border: 1px solid #ccc !important;
         }
+
+        /* Make all buttons use black font by default */
         .stButton > button, .stDownloadButton > button {
-            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
-        }
-        .stMarkdown, .stDataFrame {
             font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
             color: black !important;
         }
+
+        /* Exception: make the "Browse files" button font white */
+        .stFileUploader label div span {
+            color: white !important;
+            font-weight: bold;
+        }
+
+        /* Tables, markdown */
+        .stMarkdown, .stDataFrame {
+            color: black !important;
+            font-family: "Proxima Soft", "Avenir", "Helvetica Neue", sans-serif !important;
+        }
+
         </style>
         """,
         unsafe_allow_html=True
@@ -299,6 +316,7 @@ if user_question:
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
