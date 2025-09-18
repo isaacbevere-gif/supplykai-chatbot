@@ -13,7 +13,7 @@ st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout
 
 # ---- BACKGROUND IMAGE (JPEG) ----
 def set_background():
-    file_path = "supplykai_background_image.jpeg"
+    file_path = "supplykai_background_image.jpg"
     if os.path.exists(file_path):
         with open(file_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
@@ -258,6 +258,7 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
