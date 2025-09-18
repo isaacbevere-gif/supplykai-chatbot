@@ -14,7 +14,7 @@ st.set_page_config(page_title="SupplyKai Assistant v.01", page_icon=None, layout
 # ---- BACKGROUND IMAGE (JPEG) ----
 def set_background():
     def set_custom_styles():
-    st.markdown(
+        st.markdown(
         """
         <style>
         html, body, [class*="css"] {
@@ -287,6 +287,7 @@ if user_question:
                 st.success(msg["content"])
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 
