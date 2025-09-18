@@ -2,13 +2,42 @@ import streamlit as st
 import pandas as pd
 import openai
 import json
+from PIL import Image
 
 # ---- App Configuration ----
-st.set_page_config(page_title="SupplyKai Forecast Assistant 🤖", layout="centered")
+st.set_page_config(
+    page_title="SupplyKai V.01 (Big4 Monthly Rolling Forecast Assistant)",
+    page_icon="🌀",
+    layout="centered"
+)
+
+# ---- Inject Custom Background Image ----
+def set_background():
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("supplykai_background_image.png");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+set_background()
+
+# ---- Display Logo ----
+logo = Image.open("supplykai_logo.png")
+st.image(logo, width=200)
+
 st.title("📦 SupplyKai Forecast Assistant")
 st.caption("Upload your forecast file and ask natural questions about forecasted demand.")
 
-# ---- Load OpenAI API Key from Streamlit Secrets ----
+# ---- Load OpenAI API Key ----
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ---- File Upload ----
@@ -25,7 +54,7 @@ except Exception as e:
     st.error(f"Failed to read the Excel file: {e}")
     st.stop()
 
-# ---- Forecast Lookup (Specific Month) ----
+# ---- Forecast Lookup ----
 def forecast_lookup(collection: str, month: str, year: int) -> str:
     month_column_map = {
         "April 2026": "SU26 M1",
@@ -114,32 +143,20 @@ functions = [
         "parameters": {
             "type": "object",
             "properties": {
-                "collection": {
-                    "type": "string",
-                    "description": "Style collection name, e.g. 'Accolade'"
-                },
-                "month": {
-                    "type": "string",
-                    "description": "Full month name, e.g. 'September'"
-                },
-                "year": {
-                    "type": "integer",
-                    "description": "Year, e.g. 2026"
-                }
+                "collection": {"type": "string", "description": "e.g. 'Accolade'"},
+                "month": {"type": "string", "description": "e.g. 'September'"},
+                "year": {"type": "integer", "description": "e.g. 2026"}
             },
             "required": ["collection", "month", "year"]
         }
     },
     {
         "name": "total_forecast_for_collection",
-        "description": "Get the total forecasted demand for a collection across all months",
+        "description": "Get total forecast across all months for a collection",
         "parameters": {
             "type": "object",
             "properties": {
-                "collection": {
-                    "type": "string",
-                    "description": "Style collection name, e.g. 'Accolade'"
-                }
+                "collection": {"type": "string", "description": "e.g. 'Accolade'"}
             },
             "required": ["collection"]
         }
@@ -150,14 +167,8 @@ functions = [
         "parameters": {
             "type": "object",
             "properties": {
-                "month": {
-                    "type": "string",
-                    "description": "Full month name, e.g. 'September'"
-                },
-                "year": {
-                    "type": "integer",
-                    "description": "Year, e.g. 2026"
-                }
+                "month": {"type": "string", "description": "e.g. 'September'"},
+                "year": {"type": "integer", "description": "e.g. 2026"}
             },
             "required": ["month", "year"]
         }
@@ -170,7 +181,6 @@ user_question = st.text_input("💬 Ask your forecast question:")
 if user_question:
     with st.spinner("Thinking..."):
         try:
-            # Call OpenAI to interpret the user's question
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": user_question}],
@@ -200,9 +210,4 @@ if user_question:
         except Exception as e:
             st.error(f"An error occurred while processing your question:\n\n{e}")
 
-
-            st.success(answer)
-
-        except Exception as e:
-            st.error(f"An error occurred while processing your question:\n\n{e}")
 
